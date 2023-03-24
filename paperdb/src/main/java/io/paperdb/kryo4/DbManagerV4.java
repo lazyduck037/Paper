@@ -1,21 +1,24 @@
-package io.paperdb;
+package io.paperdb.kryo4;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import io.paperdb.PaperDbException;
+import io.paperdb.Utils;
+
 /**
  * @author lazyduck037
  */
-class DbManagerV4 {
+public class DbManagerV4 {
    private static final String BACKUP_EXTENSION = ".bak";
    private final String mOldDbPath;
    private volatile boolean mIsForceUseV4;
 
    private volatile boolean mPaperDirIsCreatedV4;
 
-   DbManagerV4(String oldDbName, boolean isForceUseV4){
+   public DbManagerV4(String oldDbName, boolean isForceUseV4){
       mOldDbPath = oldDbName;
       mIsForceUseV4 = isForceUseV4;
    }
@@ -26,7 +29,7 @@ class DbManagerV4 {
       return res;
    }
 
-   synchronized void assertInit() {
+   public synchronized void assertInit() {
       if (!mPaperDirIsCreatedV4) {
          if (!new File(mOldDbPath).exists()) {
             if (mIsForceUseV4) {
@@ -42,7 +45,7 @@ class DbManagerV4 {
       }
    }
 
-   boolean createBackWrite(File originalFile, File backupFile){
+   public boolean createBackWrite(File originalFile, File backupFile){
       if (originalFile.exists()) {
          //Rename original to backup
          if (!backupFile.exists()) {
@@ -58,13 +61,13 @@ class DbManagerV4 {
       return true;
    }
 
-   long lastModified(String key) {
+   public long lastModified(String key) {
       assertInit();
       final File originalFile = getOriginalFile(key);
       return originalFile.exists() ? originalFile.lastModified() : -1;
    }
 
-   List<String> getAllKeys() {
+   public List<String> getAllKeys() {
       // Acquire global lock to make sure per-key operations (delete etc) completed
       // and block future per-key operations until reading for all keys is completed
       assertInit();
@@ -97,24 +100,24 @@ class DbManagerV4 {
       }
    }
 
-   String getDbPath(){
+   public String getDbPath(){
       return mOldDbPath;
    }
 
-   File getOriginalFile(String key) {
+   public File getOriginalFile(String key) {
       final String tablePath = getOriginalFilePath(key);
       return new File(tablePath);
    }
 
-   String getOriginalFilePath(String key) {
+   public String getOriginalFilePath(String key) {
       return mOldDbPath + File.separator + key + ".pt";
    }
 
-   File makeBackupFile(File originalFile) {
+   public File makeBackupFile(File originalFile) {
       return new File(originalFile.getPath() + BACKUP_EXTENSION);
    }
 
-   boolean createBackUpBeforeSelect(File originalFile, File backupFile, String key){
+   public boolean createBackUpBeforeSelect(File originalFile, File backupFile, String key){
       if (backupFile.exists()) {
          //noinspection ResultOfMethodCallIgnored
          originalFile.delete();
@@ -128,7 +131,7 @@ class DbManagerV4 {
       return true;
    }
 
-   boolean existsInternal(String key) {
+   public boolean existsInternal(String key) {
       assertInit();
       final File originalFile = getOriginalFile(key);
       return originalFile.exists();

@@ -3,24 +3,25 @@ package io.paperdb;
 import android.content.Context;
 import android.util.Log;
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import static io.paperdb.Paper.TAG;
 import com.esotericsoftware.kryo.kryo5.Serializer;
+
+import io.paperdb.kryo4.DbManagerV4;
 import io.paperdb.kryo4.PaperDbKryo4Factory;
 import io.paperdb.kryo4.ReadContentKryo4;
 import io.paperdb.kryo4.ThreadLocalKryo4;
+import io.paperdb.kryo5.DbManager5;
 import io.paperdb.kryo5.PaperDbKryo5Factory;
 import io.paperdb.kryo5.ReadContentKryo5;
 import io.paperdb.kryo5.ThreadLocalKryo5;
 
 class DbStoragePlainFile {
     private final boolean mIsMigration;
-    private final DbManager dbManager;
+    private final DbManager5 dbManager;
     private DbManagerV4 dbManagerV4;
     private final KeyLocker keyLocker = new KeyLocker(); // To sync key-dependent operations by key
 
@@ -50,7 +51,7 @@ class DbStoragePlainFile {
             dbPath = dbPath + "New";
             dbManagerV4 =  new DbManagerV4(oldDbPath, false);
         }
-        dbManager = new DbManager(dbPath);
+        dbManager = new DbManager5(dbPath);
     }
 
     DbStoragePlainFile(String dbFilesDir, String dbName,
@@ -75,7 +76,7 @@ class DbStoragePlainFile {
             dbPath = dbPath + "New";
             dbManagerV4 = new DbManagerV4(oldDbPath, false);
         }
-        dbManager = new DbManager(dbPath);
+        dbManager = new DbManager5(dbPath);
     }
 
     void destroy() {

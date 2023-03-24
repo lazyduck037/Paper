@@ -1,4 +1,4 @@
-package io.paperdb;
+package io.paperdb.kryo5;
 
 import java.io.File;
 import java.io.FilenameFilter;
@@ -6,14 +6,17 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import io.paperdb.PaperDbException;
+import io.paperdb.Utils;
+
 /**
  * @author lazyduck037
  */
-class DbManager {
+public class DbManager5 {
     private static final String BACKUP_EXTENSION = ".bak";
     private final String mDbPath;
     private volatile boolean mPaperDirIsCreated;
-    DbManager(String dbName){
+    public DbManager5(String dbName){
         mDbPath = dbName;
     }
 
@@ -26,7 +29,7 @@ class DbManager {
     /**
      * Must be synchronized to avoid race conditions on creating dir from different threads
      */
-    synchronized void assertInit() {
+    public synchronized void assertInit() {
         if (!mPaperDirIsCreated) {
             if (!new File(mDbPath).exists()) {
                 boolean isReady = new File(mDbPath).mkdirs();
@@ -38,13 +41,13 @@ class DbManager {
         }
     }
 
-    long lastModified(String key) {
+    public long lastModified(String key) {
         assertInit();
         final File originalFile = getOriginalFile(key);
         return originalFile.exists() ? originalFile.lastModified() : -1;
     }
 
-    List<String> getAllKeys() {
+    public List<String> getAllKeys() {
         // Acquire global lock to make sure per-key operations (delete etc) completed
         // and block future per-key operations until reading for all keys is completed
         assertInit();
@@ -83,24 +86,24 @@ class DbManager {
     }
 
 
-    String getDbPath(){
+    public String getDbPath(){
         return mDbPath;
     }
 
-    File getOriginalFile(String key) {
+    public File getOriginalFile(String key) {
         final String tablePath = getOriginalFilePath(key);
         return new File(tablePath);
     }
 
-    String getOriginalFilePath(String key) {
+    public String getOriginalFilePath(String key) {
         return mDbPath + File.separator + key + ".pt";
     }
 
-    File makeBackupFile(File originalFile) {
+    public File makeBackupFile(File originalFile) {
         return new File(originalFile.getPath() + BACKUP_EXTENSION);
     }
 
-    boolean createBackWrite(File originalFile, File backupFile){
+    public boolean createBackWrite(File originalFile, File backupFile){
         if (originalFile.exists()) {
             //Rename original to backup
             if (!backupFile.exists()) {
@@ -116,7 +119,7 @@ class DbManager {
         return true;
     }
 
-    boolean createBackUpBeforeSelect(File originalFile, File backupFile, String key){
+    public boolean createBackUpBeforeSelect(File originalFile, File backupFile, String key){
         if (backupFile.exists()) {
             //noinspection ResultOfMethodCallIgnored
             originalFile.delete();
@@ -130,7 +133,7 @@ class DbManager {
         return true;
     }
 
-    boolean existsInternal(String key) {
+    public boolean existsInternal(String key) {
         assertInit();
         final File originalFile = getOriginalFile(key);
         return originalFile.exists();
