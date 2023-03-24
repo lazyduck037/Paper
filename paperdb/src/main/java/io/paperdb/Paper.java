@@ -39,8 +39,8 @@ public class Paper {
     private static final ConcurrentHashMap<String, Book> mBookMap = new ConcurrentHashMap<>();
     private static final HashMap<Class, Serializer> mCustomSerializersV5 = new HashMap<>();
     private static final HashMap<Class, com.esotericsoftware.kryo.Serializer> mCustomSerializersV4 = new HashMap<>();
-    private static boolean isUsingOlderVersion = false;
-    private static boolean isForceUseOlderVersion = true;
+    private static boolean isUsingOlderVersion = true;
+    private static final boolean isForceUseOlderVersion = false;
     /**
      * Lightweight method to init Paper instance. Should be executed in {@link Application#onCreate()}
      * or {@link android.app.Activity#onCreate(Bundle)}

@@ -38,7 +38,10 @@ public class DbManagerV4 {
                   throw new RuntimeException("Couldn't create Paper dir: " + mOldDbPath);
                }
             }else {
-               throw new RuntimeException("Couldn't create Paper dir: " + mOldDbPath);
+               boolean isReady = new File(mOldDbPath).mkdirs();
+               if (!isReady) {
+                  throw new RuntimeException("Couldn't create Paper dir: " + mOldDbPath);
+               }
             }
          }
          mPaperDirIsCreatedV4 = true;

@@ -50,7 +50,7 @@ public class CustomBookLocationTest {
         assertTrue(locationSubDir.isDirectory());
         assertEquals(1, locationSubDir.listFiles().length);
         assertTrue(locationSubDir.listFiles()[0].isDirectory());
-        assertEquals("io.paperdb", locationSubDir.listFiles()[0].getName());
+        assertEquals(book.getDbName(), locationSubDir.listFiles()[0].getName());
 
         book.delete("city");
         assertFalse(book.contains("city"));

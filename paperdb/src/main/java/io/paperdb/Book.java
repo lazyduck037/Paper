@@ -184,4 +184,8 @@ public class Book {
     public @NonNull String getPathOld(@NonNull String key) {
         return mStorage.getOriginalFilePathV4(key);
     }
+
+    public @NonNull String getDbName() {
+        return mStorage.getDbName();
+    }
 }

@@ -6,6 +6,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import static io.paperdb.Paper.TAG;
 import com.esotericsoftware.kryo.kryo5.Serializer;
@@ -29,6 +30,8 @@ class DbStoragePlainFile {
 
     private final boolean mForceUse4;
 
+    private String mDbName;
+
     DbStoragePlainFile(Context context, String dbName,
                        HashMap<Class, Serializer> serializersV5,
                        HashMap<Class, com.esotericsoftware.kryo.Serializer> serializersV4,
@@ -41,7 +44,7 @@ class DbStoragePlainFile {
         ReadContentKryo5 readContentKryo5 = new ReadContentKryo5(new ThreadLocalKryo5(new PaperDbKryo5Factory(serializersV5)));
         ReadContentKryo4 readContentKryo4 = new ReadContentKryo4( new ThreadLocalKryo4(new PaperDbKryo4Factory(serializersV4)));
         operation = new Operation(readContentKryo5, readContentKryo4, isMigration);
-
+        mDbName = dbName;
         String dbPath = context.getFilesDir() + File.separator + dbName;
         String oldDbPath = null;
         if (forceUse4){
@@ -66,7 +69,7 @@ class DbStoragePlainFile {
         ReadContentKryo5 readContentKryo5 = new ReadContentKryo5(new ThreadLocalKryo5(new PaperDbKryo5Factory(serializersV5)));
         ReadContentKryo4 readContentKryo4 = new ReadContentKryo4(new ThreadLocalKryo4(new PaperDbKryo4Factory(serializersV4)));
         operation = new Operation(readContentKryo5, readContentKryo4, isMigration);
-
+        mDbName = dbName;
         String dbPath = dbFilesDir + File.separator + dbName;
         String oldDbPath = null;
         if (forceUse4){
@@ -191,20 +194,10 @@ class DbStoragePlainFile {
             final File originalFile = dbManager.getOriginalFile(key);
             final File backupFile = dbManager.makeBackupFile(originalFile);
             if(!dbManager.createBackUpBeforeSelect(originalFile, backupFile, key)){
-                return null;
+                return selectOld(key);
             }
-            if(dbManager.existsInternal(key)){
-                return operation.readTableFile(key, originalFile);
-            }
+            return operation.readTableFile(key, originalFile);
 
-            //Read Old File.
-            dbManagerV4.assertInit();
-            final File originalFileV4 = dbManagerV4.getOriginalFile(key);
-            final File backupFileV4 = dbManagerV4.makeBackupFile(originalFileV4);
-            if(!dbManagerV4.createBackUpBeforeSelect(originalFileV4, backupFileV4, key)){
-                return null;
-            }
-            return operation.readTableFileV4(key, originalFile);
         }else {
             return selectNew(key);
         }
@@ -278,12 +271,12 @@ class DbStoragePlainFile {
     }
 
     private List<String> getTotalKeyMigrate(){
-        List<String> currentDb =  dbManager.getAllKeys();
+        List<String> currentDb = dbManager.getAllKeys();
         List<String> oldDb;
         if (mIsMigration){
             oldDb = dbManagerV4.getAllKeys();
         }else {
-            oldDb = new ArrayList<>();
+            oldDb = new LinkedList<>();
         }
         HashSet<String> res = new HashSet<>(currentDb);
         res.addAll(oldDb);
@@ -339,6 +332,16 @@ class DbStoragePlainFile {
 
     String getRootFolderPathV4() {
         return dbManagerV4.getDbPath();
+    }
+
+    String getDbName(){
+        if (mForceUse4){
+            return mDbName;
+        }
+        if (mIsMigration){
+            return mDbName + "New";
+        }
+        return mDbName;
     }
 }
 
