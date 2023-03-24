@@ -43,10 +43,12 @@ class DbStoragePlainFile {
 
         String dbPath = context.getFilesDir() + File.separator + dbName;
         String oldDbPath = null;
-        if (isMigration){
+        if (forceUse4){
+            dbManagerV4 = new DbManagerV4(dbPath, true);
+        }else if (isMigration){
             oldDbPath = dbPath;
             dbPath = dbPath + "New";
-            dbManagerV4 =  new DbManagerV4(oldDbPath);
+            dbManagerV4 =  new DbManagerV4(oldDbPath, false);
         }
         dbManager = new DbManager(dbPath);
     }
@@ -66,10 +68,12 @@ class DbStoragePlainFile {
 
         String dbPath = dbFilesDir + File.separator + dbName;
         String oldDbPath = null;
-        if (isMigration){
+        if (forceUse4){
+            dbManagerV4 = new DbManagerV4(dbPath, true);
+        }else if (isMigration){
             oldDbPath = dbPath;
             dbPath = dbPath + "New";
-            dbManagerV4 =  new DbManagerV4(oldDbPath);
+            dbManagerV4 = new DbManagerV4(oldDbPath, false);
         }
         dbManager = new DbManager(dbPath);
     }
@@ -79,6 +83,12 @@ class DbStoragePlainFile {
         // and block future per-key operations until destroy is completed
         try {
             keyLocker.acquireGlobal();
+
+            if (mForceUse4){
+                destroyForce();
+                return;
+            }
+
             if (!dbManager.destroy()) {
                 Log.e(TAG, "Couldn't delete Paper dir " + dbManager.getDbPath());
             }
@@ -94,96 +104,162 @@ class DbStoragePlainFile {
         }
     }
 
+    private void destroyForce(){
+        if (!dbManagerV4.destroy()) {
+            Log.e(TAG, "Couldn't delete Paper dir " + dbManagerV4.getDbPath());
+        }
+    }
+
     <E> void insert(String key, E value) {
         try {
             keyLocker.acquire(key);
-            dbManager.assertInit();
 
-            final File originalFile = dbManager.getOriginalFile(key);
-            final File backupFile = dbManager.makeBackupFile(originalFile);
-            // Rename the current file so it may be used as a backup during the next readFile
-            if(!dbManager.createBackWrite(originalFile, backupFile)){
-                throw new PaperDbException("Couldn't rename file " + originalFile
-                        + " to backup file " + backupFile);
+            if (mForceUse4){
+                insertOld(key, value);
+            }else {
+                insertNew(key, value);
             }
-
-            final PaperTable<E> paperTable = new PaperTable<>(value);
-            writeTableFile(key, paperTable, originalFile, backupFile);
         } finally {
             keyLocker.release(key);
         }
     }
 
+    private <E>void insertNew(String key, E value){
+        dbManager.assertInit();
+        final File originalFile = dbManager.getOriginalFile(key);
+        final File backupFile = dbManager.makeBackupFile(originalFile);
+        // Rename the current file so it may be used as a backup during the next readFile
+        if (!dbManager.createBackWrite(originalFile, backupFile)) {
+            throw new PaperDbException("Couldn't rename file " + originalFile
+                    + " to backup file " + backupFile);
+        }
+
+        final PaperTable<E> paperTable = new PaperTable<>(value);
+        operation.writeTableFile(key, paperTable, originalFile, backupFile);
+    }
+
+    private <E>void insertOld(String key, E value){
+        dbManagerV4.assertInit();
+        final File originalFile = dbManagerV4.getOriginalFile(key);
+        final File backupFile = dbManagerV4.makeBackupFile(originalFile);
+        // Rename the current file so it may be used as a backup during the next readFile
+        if (!dbManagerV4.createBackWrite(originalFile, backupFile)) {
+            throw new PaperDbException("Couldn't rename file " + originalFile
+                    + " to backup file " + backupFile);
+        }
+
+        final PaperTable<E> paperTable = new PaperTable<>(value);
+        operation.writeTableFileV4(key, paperTable, originalFile, backupFile);
+    }
+
     <E> E select(String key) {
         try {
             keyLocker.acquire(key);
+            if (mForceUse4){
+                return selectOld(key);
+            }
+            return selectMigrate(key);
+        } finally {
+            keyLocker.release(key);
+        }
+    }
+
+    private <E> E selectOld(String key) {
+        dbManagerV4.assertInit();
+        final File originalFileV4 = dbManagerV4.getOriginalFile(key);
+        final File backupFileV4 = dbManagerV4.makeBackupFile(originalFileV4);
+        if(!dbManagerV4.createBackUpBeforeSelect(originalFileV4, backupFileV4, key)){
+            return null;
+        }
+        return operation.readTableFileV4(key, originalFileV4);
+    }
+
+    private <E> E selectNew(String key) {
+        dbManager.assertInit();
+        final File originalFile = dbManager.getOriginalFile(key);
+        final File backupFile = dbManager.makeBackupFile(originalFile);
+        if(!dbManager.createBackUpBeforeSelect(originalFile, backupFile, key)){
+            return null;
+        }
+        return operation.readTableFile(key, originalFile);
+    }
+
+    private <E> E selectMigrate(String key) {
+        if (mIsMigration){
             dbManager.assertInit();
             final File originalFile = dbManager.getOriginalFile(key);
             final File backupFile = dbManager.makeBackupFile(originalFile);
             if(!dbManager.createBackUpBeforeSelect(originalFile, backupFile, key)){
                 return null;
             }
-            if (mIsMigration){
-                if(dbManager.existsInternal(key)){
-                    return operation.readTableFile(key, originalFile);
-                }
-
-                //Read Old File.
-                dbManagerV4.assertInit();
-                final File originalFileV4 = dbManagerV4.getOriginalFile(key);
-                final File backupFileV4 = dbManagerV4.makeBackupFile(originalFileV4);
-                if(!dbManagerV4.createBackUpBeforeSelect(originalFileV4, backupFileV4, key)){
-                    return null;
-                }
-                return operation.readTableFileV4(key, originalFile);
-            }else {
+            if(dbManager.existsInternal(key)){
                 return operation.readTableFile(key, originalFile);
             }
-        } finally {
-            keyLocker.release(key);
+
+            //Read Old File.
+            dbManagerV4.assertInit();
+            final File originalFileV4 = dbManagerV4.getOriginalFile(key);
+            final File backupFileV4 = dbManagerV4.makeBackupFile(originalFileV4);
+            if(!dbManagerV4.createBackUpBeforeSelect(originalFileV4, backupFileV4, key)){
+                return null;
+            }
+            return operation.readTableFileV4(key, originalFile);
+        }else {
+            return selectNew(key);
         }
     }
 
     boolean exists(String key) {
         try {
             keyLocker.acquire(key);
-            if (mIsMigration){
-                boolean res = dbManager.existsInternal(key);
-                if (!res){
-                    return dbManagerV4.existsInternal(key);
-                }
-                return true;
+            if (mForceUse4){
+                return existOld(key);
             }
-            return dbManager.existsInternal(key);
+            return existMigrate(key);
         } finally {
             keyLocker.release(key);
         }
+    }
+
+    private boolean existMigrate(String key){
+        if (mIsMigration){
+            boolean res = dbManager.existsInternal(key);
+            if (!res){
+                return dbManagerV4.existsInternal(key);
+            }
+            return true;
+        }
+        return dbManager.existsInternal(key);
+    }
+
+    private boolean existOld(String key){
+        return dbManagerV4.existsInternal(key);
     }
 
     long lastModified(String key) {
         try {
             keyLocker.acquire(key);
-            if (mIsMigration){
-                if(dbManager.existsInternal(key)){
-                    return dbManager.lastModified(key);
-                }
-                return dbManagerV4.lastModified(key);
+            if (mForceUse4){
+                return lastModifiedOld(key);
             }
-            return dbManager.lastModified(key);
+            return lastModifiedMigrate(key);
         } finally {
             keyLocker.release(key);
         }
     }
 
-    List<String> getAllKeys() {
-        try {
-            // Acquire global lock to make sure per-key operations (delete etc) completed
-            // and block future per-key operations until reading for all keys is completed
-            keyLocker.acquireGlobal();
-            return dbManager.getAllKeys();
-        } finally {
-            keyLocker.releaseGlobal();
+    private long lastModifiedOld(String key){
+        return dbManagerV4.lastModified(key);
+    }
+
+    private long lastModifiedMigrate(String key){
+        if (mIsMigration){
+            if(dbManager.existsInternal(key)){
+                return dbManager.lastModified(key);
+            }
+            return dbManagerV4.lastModified(key);
         }
+        return dbManager.lastModified(key);
     }
 
     List<String> getTotalKey() {
@@ -191,43 +267,54 @@ class DbStoragePlainFile {
             // Acquire global lock to make sure per-key operations (delete etc) completed
             // and block future per-key operations until reading for all keys is completed
             keyLocker.acquireGlobal();
-            List<String> currentDb =  dbManager.getAllKeys();
-            List<String> oldDb;
-            if (mIsMigration){
-                oldDb = dbManagerV4.getAllKeys();
-            }else {
-                oldDb = new ArrayList<>();
+            if (mForceUse4){
+                return getTotalKeyOld();
             }
-            HashSet<String> res = new HashSet<>(currentDb);
-            res.addAll(oldDb);
-            return new ArrayList<String>(res);
+            return getTotalKeyMigrate();
         } finally {
             keyLocker.releaseGlobal();
         }
     }
 
-    List<String> getAllKeysV4() {
-        try {
-            // Acquire global lock to make sure per-key operations (delete etc) completed
-            // and block future per-key operations until reading for all keys is completed
-            keyLocker.acquireGlobal();
-            if (!mIsMigration) return new ArrayList<>();
-            return dbManagerV4.getAllKeys();
-        } finally {
-            keyLocker.releaseGlobal();
+    private List<String> getTotalKeyMigrate(){
+        List<String> currentDb =  dbManager.getAllKeys();
+        List<String> oldDb;
+        if (mIsMigration){
+            oldDb = dbManagerV4.getAllKeys();
+        }else {
+            oldDb = new ArrayList<>();
         }
+        HashSet<String> res = new HashSet<>(currentDb);
+        res.addAll(oldDb);
+        return new ArrayList(res);
+    }
+
+    private List<String> getTotalKeyOld(){
+        return dbManagerV4.getAllKeys();
     }
 
     void deleteIfExists(String key) {
         try {
             keyLocker.acquire(key);
-            if(mIsMigration){
-                dbManagerV4.deleteTable(key);
+            if (mForceUse4){
+                deleteIfExistOld(key);
+            }else {
+                deleteIfExistMigrate(key);
             }
-            dbManager.deleteTable(key);
         } finally {
             keyLocker.release(key);
         }
+    }
+
+    private void deleteIfExistOld(String key){
+        dbManagerV4.deleteTable(key);
+    }
+
+    private void deleteIfExistMigrate(String key){
+        if(mIsMigration){
+            dbManagerV4.deleteTable(key);
+        }
+        dbManager.deleteTable(key);
     }
 
     void setLogLevel(int level) {
@@ -251,65 +338,6 @@ class DbStoragePlainFile {
 
     String getRootFolderPathV4() {
         return dbManagerV4.getDbPath();
-    }
-
-    /**
-     * Attempt to write the file, delete the backup and return true as atomically as
-     * possible.  If any exception occurs, delete the new file; next time we will restore
-     * from the backup.
-     *
-     * @param key          table key
-     * @param paperTable   table instance
-     * @param originalFile file to write new data
-     * @param backupFile   backup file to be used if write is failed
-     */
-    private <E> void writeTableFile(String key, PaperTable<E> paperTable,
-                                    File originalFile, File backupFile) {
-        com.esotericsoftware.kryo.kryo5.io.Output kryoOutput = null;
-        try {
-            FileOutputStream fileStream = new FileOutputStream(originalFile);
-            kryoOutput = new com.esotericsoftware.kryo.kryo5.io.Output(fileStream);
-            operation.getKryo().writeObject(kryoOutput, paperTable);
-            kryoOutput.flush();
-            fileStream.flush();
-            sync(fileStream);
-            kryoOutput.close(); //also close file stream
-            kryoOutput = null;
-
-            // Writing was successful, delete the backup file if there is one.
-            //noinspection ResultOfMethodCallIgnored
-            backupFile.delete();
-        } catch (IOException | com.esotericsoftware.kryo.kryo5.KryoException e) {
-            // Clean up an unsuccessfully written file
-            if (originalFile.exists()) {
-                if (!originalFile.delete()) {
-                    throw new PaperDbException("Couldn't clean up partially-written file "
-                            + originalFile, e);
-                }
-            }
-            throw new PaperDbException("Couldn't save table: " + key + ". " +
-                    "Backed up table will be used on next read attempt", e);
-        } finally {
-            if (kryoOutput != null) {
-                kryoOutput.close();  // closing opened kryo output with initial file stream.
-            }
-        }
-    }
-
-
-
-    /**
-     * Perform an fsync on the given FileOutputStream.  The stream at this
-     * point must be flushed but not yet closed.
-     */
-    private static void sync(FileOutputStream stream) {
-        //noinspection EmptyCatchBlock
-        try {
-            if (stream != null) {
-                stream.getFD().sync();
-            }
-        } catch (IOException e) {
-        }
     }
 }
 

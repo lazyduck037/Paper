@@ -11,12 +11,13 @@ import java.util.List;
 class DbManagerV4 {
    private static final String BACKUP_EXTENSION = ".bak";
    private final String mOldDbPath;
-   private volatile boolean mPaperDirIsCreated;
+   private volatile boolean mIsForceUseV4;
 
    private volatile boolean mPaperDirIsCreatedV4;
 
-   DbManagerV4(String oldDbName){
+   DbManagerV4(String oldDbName, boolean isForceUseV4){
       mOldDbPath = oldDbName;
+      mIsForceUseV4 = isForceUseV4;
    }
 
    public boolean destroy(){
@@ -28,10 +29,33 @@ class DbManagerV4 {
    synchronized void assertInit() {
       if (!mPaperDirIsCreatedV4) {
          if (!new File(mOldDbPath).exists()) {
-            throw new RuntimeException("Couldn't create Paper dir: " + mOldDbPath);
+            if (mIsForceUseV4) {
+               boolean isReady = new File(mOldDbPath).mkdirs();
+               if (!isReady) {
+                  throw new RuntimeException("Couldn't create Paper dir: " + mOldDbPath);
+               }
+            }else {
+               throw new RuntimeException("Couldn't create Paper dir: " + mOldDbPath);
+            }
          }
          mPaperDirIsCreatedV4 = true;
       }
+   }
+
+   boolean createBackWrite(File originalFile, File backupFile){
+      if (originalFile.exists()) {
+         //Rename original to backup
+         if (!backupFile.exists()) {
+            if (!originalFile.renameTo(backupFile)) {
+               return false;
+            }
+         } else {
+            //Backup exist -> original file is broken and must be deleted
+            //noinspection ResultOfMethodCallIgnored
+            originalFile.delete();
+         }
+      }
+      return true;
    }
 
    long lastModified(String key) {

@@ -19,17 +19,19 @@ public class Book {
                    String dbName,
                    HashMap<Class, Serializer> serializersV5,
                    HashMap<Class, com.esotericsoftware.kryo.Serializer> serializersV4,
-                   boolean isMigration
+                   boolean isMigration,
+                   boolean forceUse4
                    ) {
-        mStorage = new DbStoragePlainFile(context.getApplicationContext(), dbName, serializersV5, serializersV4, isMigration);
+        mStorage = new DbStoragePlainFile(context.getApplicationContext(), dbName, serializersV5, serializersV4, isMigration, forceUse4);
     }
 
     protected Book(String dbPath, String dbName,
                    HashMap<Class, Serializer> serializersV5,
                    HashMap<Class, com.esotericsoftware.kryo.Serializer> serializersV4,
-                   boolean isMigration
+                   boolean isMigration,
+                   boolean forceUse4
                    ) {
-        mStorage = new DbStoragePlainFile(dbPath, dbName, serializersV5, serializersV4, isMigration);
+        mStorage = new DbStoragePlainFile(dbPath, dbName, serializersV5, serializersV4, isMigration, forceUse4);
     }
 
     /**

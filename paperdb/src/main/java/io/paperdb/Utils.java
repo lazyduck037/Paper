@@ -1,6 +1,8 @@
 package io.paperdb;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 
 /**
  * @author lazyduck037
@@ -24,5 +26,36 @@ public class Utils {
          }
       }
       return directory.delete();
+   }
+
+   public static boolean createBackWrite(File originalFile, File backupFile) {
+      if (originalFile.exists()) {
+         //Rename original to backup
+         if (!backupFile.exists()) {
+            if (!originalFile.renameTo(backupFile)) {
+               return false;
+            }
+         } else {
+            //Backup exist -> original file is broken and must be deleted
+            //noinspection ResultOfMethodCallIgnored
+            originalFile.delete();
+         }
+      }
+      return true;
+   }
+
+
+   /**
+    * Perform an fsync on the given FileOutputStream.  The stream at this
+    * point must be flushed but not yet closed.
+    */
+   public static void sync(FileOutputStream stream) {
+      //noinspection EmptyCatchBlock
+      try {
+         if (stream != null) {
+            stream.getFD().sync();
+         }
+      } catch (IOException e) {
+      }
    }
 }

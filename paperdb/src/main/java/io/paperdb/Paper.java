@@ -40,6 +40,7 @@ public class Paper {
     private static final HashMap<Class, Serializer> mCustomSerializersV5 = new HashMap<>();
     private static final HashMap<Class, com.esotericsoftware.kryo.Serializer> mCustomSerializersV4 = new HashMap<>();
     private static boolean isUsingOlderVersion = false;
+    private static boolean isForceUseOlderVersion = true;
     /**
      * Lightweight method to init Paper instance. Should be executed in {@link Application#onCreate()}
      * or {@link android.app.Activity#onCreate(Bundle)}
@@ -108,9 +109,9 @@ public class Paper {
             Book book = mBookMap.get(key);
             if (book == null) {
                 if (location == null) {
-                    book = new Book(mContext, name, mCustomSerializersV5, mCustomSerializersV4, isUsingOlderVersion);
+                    book = new Book(mContext, name, mCustomSerializersV5, mCustomSerializersV4, isUsingOlderVersion, isForceUseOlderVersion);
                 } else {
-                    book = new Book(location, name, mCustomSerializersV5, mCustomSerializersV4, isUsingOlderVersion);
+                    book = new Book(location, name, mCustomSerializersV5, mCustomSerializersV4, isUsingOlderVersion, isForceUseOlderVersion);
                 }
                 mBookMap.put(key, book);
             }

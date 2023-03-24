@@ -1,7 +1,7 @@
 package io.paperdb.kryo4;
 
+import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -39,5 +39,9 @@ public class ReadContentKryo4 {
       } finally {
          i.close();
       }
+   }
+
+   public Kryo getKryo(){
+      return mKryo.get();
    }
 }

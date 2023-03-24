@@ -124,11 +124,13 @@ public class MultiThreadTest {
      */
     @Test
     public void testWriteReadDestroyMultiThread() throws Exception {
-        ExecutorService executor = Executors.newFixedThreadPool(2);
+        ExecutorService executor = Executors.newFixedThreadPool(4);
         List<Callable<Object>> tasks = new LinkedList<>();
 
         tasks.add(Executors.callable(writeReadDestroy("multi_thread_key_1", 200)));
         tasks.add(Executors.callable(writeReadDestroy("multi_thread_key_2", 200)));
+        tasks.add(Executors.callable(writeReadDestroy("multi_thread_key_3", 200)));
+        tasks.add(Executors.callable(writeReadDestroy("multi_thread_key_4", 200)));
 
         // Make sure no crash produced
         List<Future<Object>> futures = executor.invokeAll(tasks);
