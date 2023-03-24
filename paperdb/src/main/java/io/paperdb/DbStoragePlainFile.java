@@ -11,86 +11,40 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.UUID;
-import io.paperdb.serializer.NoArgCollectionSerializer;
 import static io.paperdb.Paper.TAG;
-import com.esotericsoftware.kryo.kryo5.Kryo;
-import com.esotericsoftware.kryo.kryo5.KryoException;
-import com.esotericsoftware.kryo.kryo5.Serializer;
-import com.esotericsoftware.kryo.kryo5.SerializerFactory;
-import com.esotericsoftware.kryo.kryo5.io.Input;
-import com.esotericsoftware.kryo.kryo5.io.Output;
-import com.esotericsoftware.kryo.kryo5.objenesis.strategy.StdInstantiatorStrategy;
-import com.esotericsoftware.kryo.kryo5.serializers.CompatibleFieldSerializer;
-import com.esotericsoftware.kryo.kryo5.util.DefaultInstantiatorStrategy;
+
+
 
 class DbStoragePlainFile {
     private static final String BACKUP_EXTENSION = ".bak";
-
     private final String mDbPath;
-    private final HashMap<Class, Serializer> mCustomSerializers;
+    private final HashMap<Class, com.esotericsoftware.kryo.kryo5.Serializer> mCustomSerializers;
     private volatile boolean mPaperDirIsCreated;
-    private KeyLocker keyLocker = new KeyLocker(); // To sync key-dependent operations by key
+    private final KeyLocker keyLocker = new KeyLocker(); // To sync key-dependent operations by key
+    private final PaperDbKryo5Factory mPaperDbKryo5Factory;
 
-    private Kryo getKryo() {
+    private com.esotericsoftware.kryo.kryo5.Kryo getKryo() {
         return mKryo.get();
     }
 
-    private final ThreadLocal<Kryo> mKryo = new ThreadLocal<Kryo>() {
-        @Override
-        protected Kryo initialValue() {
-            return createKryoInstance(false);
-        }
-    };
+    private final ThreadLocal<com.esotericsoftware.kryo.kryo5.Kryo> mKryo;
 
-    private Kryo createKryoInstance(boolean compatibilityMode) {
-        Kryo kryo = new Kryo();
-
-        if (compatibilityMode) {
-            kryo.setOptimizedGenerics(true);
-        }
-
-        kryo.register(PaperTable.class);
-        kryo.setDefaultSerializer(CompatibleFieldSerializer.class);
-        kryo.setReferences(false);
-        kryo.setRegistrationRequired(false);
-
-        // Serialize Arrays$ArrayList
-        //noinspection ArraysAsListWithZeroOrOneArgument
-        kryo.register(Arrays.asList("").getClass(), new io.paperdb.serializer.kryo.ArraysAsListSerializer());
-        io.paperdb.serializer.kryo.UnmodifiableCollectionsSerializer.registerSerializers(kryo);
-        io.paperdb.serializer.kryo.SynchronizedCollectionsSerializer.registerSerializers(kryo);
-        // Serialize inner AbstractList$SubAbstractListRandomAccess
-        kryo.addDefaultSerializer(new ArrayList<>().subList(0, 0).getClass(),
-                new NoArgCollectionSerializer());
-        // Serialize AbstractList$SubAbstractList
-        kryo.addDefaultSerializer(new LinkedList<>().subList(0, 0).getClass(),
-                new NoArgCollectionSerializer());
-        // To keep backward compatibility don't change the order of serializers above
-
-        // UUID support
-        kryo.register(UUID.class, new io.paperdb.serializer.kryo.UUIDSerializer());
-
-        for (Class<?> clazz : mCustomSerializers.keySet())
-            kryo.register(clazz, mCustomSerializers.get(clazz));
-
-        kryo.setInstantiatorStrategy(new DefaultInstantiatorStrategy(new StdInstantiatorStrategy()));
-
-        return kryo;
-    }
 
     DbStoragePlainFile(Context context, String dbName,
-                       HashMap<Class, Serializer> serializers) {
+                       HashMap<Class, com.esotericsoftware.kryo.kryo5.Serializer> serializers) {
         mCustomSerializers = serializers;
+        mPaperDbKryo5Factory = new PaperDbKryo5Factory(serializers);
+        mKryo = new ThreadLocalKryo(mPaperDbKryo5Factory);
         mDbPath = context.getFilesDir() + File.separator + dbName;
     }
 
     DbStoragePlainFile(String dbFilesDir, String dbName,
-                       HashMap<Class, Serializer> serializers) {
+                       HashMap<Class, com.esotericsoftware.kryo.kryo5.Serializer> serializers) {
         mCustomSerializers = serializers;
         mDbPath = dbFilesDir + File.separator + dbName;
+        mPaperDbKryo5Factory = new PaperDbKryo5Factory(serializers);
+        mKryo = new ThreadLocalKryo(mPaperDbKryo5Factory);
     }
 
     void destroy() {
@@ -267,10 +221,10 @@ class DbStoragePlainFile {
      */
     private <E> void writeTableFile(String key, PaperTable<E> paperTable,
                                     File originalFile, File backupFile) {
-        Output kryoOutput = null;
+        com.esotericsoftware.kryo.kryo5.io.Output kryoOutput = null;
         try {
             FileOutputStream fileStream = new FileOutputStream(originalFile);
-            kryoOutput = new Output(fileStream);
+            kryoOutput = new com.esotericsoftware.kryo.kryo5.io.Output(fileStream);
             getKryo().writeObject(kryoOutput, paperTable);
             kryoOutput.flush();
             fileStream.flush();
@@ -281,7 +235,7 @@ class DbStoragePlainFile {
             // Writing was successful, delete the backup file if there is one.
             //noinspection ResultOfMethodCallIgnored
             backupFile.delete();
-        } catch (IOException | KryoException e) {
+        } catch (IOException | com.esotericsoftware.kryo.kryo5.KryoException e) {
             // Clean up an unsuccessfully written file
             if (originalFile.exists()) {
                 if (!originalFile.delete()) {
@@ -301,13 +255,13 @@ class DbStoragePlainFile {
     private <E> E readTableFile(String key, File originalFile) {
         try {
             return readContent(originalFile, getKryo());
-        } catch (FileNotFoundException | KryoException | ClassCastException e) {
+        } catch (FileNotFoundException | com.esotericsoftware.kryo.kryo5.KryoException | ClassCastException e) {
             Throwable exception = e;
             // Give one more chance, read data in paper 1.x compatibility mode
-            if (e instanceof KryoException) {
+            if (e instanceof com.esotericsoftware.kryo.kryo5.KryoException) {
                 try {
-                    return readContent(originalFile, createKryoInstance(true));
-                } catch (FileNotFoundException | KryoException | ClassCastException compatibleReadException) {
+                    return readContent(originalFile, mPaperDbKryo5Factory.createKryoInstance(true));
+                } catch (FileNotFoundException | com.esotericsoftware.kryo.kryo5.KryoException | ClassCastException compatibleReadException) {
                     exception = compatibleReadException;
                 }
             }
@@ -317,8 +271,8 @@ class DbStoragePlainFile {
         }
     }
 
-    private <E> E readContent(File originalFile, Kryo kryo) throws FileNotFoundException, KryoException {
-        final Input i = new Input(new FileInputStream(originalFile));
+    private <E> E readContent(File originalFile, com.esotericsoftware.kryo.kryo5.Kryo kryo) throws FileNotFoundException, com.esotericsoftware.kryo.kryo5.KryoException {
+        final com.esotericsoftware.kryo.kryo5.io.Input i = new com.esotericsoftware.kryo.kryo5.io.Input(new FileInputStream(originalFile));
         //noinspection TryFinallyCanBeTryWithResources
         try {
             //noinspection unchecked

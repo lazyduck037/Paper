@@ -66,9 +66,10 @@ afterEvaluate {
 }
 
 dependencies {
-    api ('de.javakaffee:kryo-serializers:0.45'){
-        exclude group: 'com.esotericsoftware', module: 'kryo'
-    }
+
+    api 'de.javakaffee:kryo-serializers:0.40'
+    api 'com.esotericsoftware:kryo:4.0.1'
+
     api files('libs/kryo5-5.4.1.jar')
 
 
