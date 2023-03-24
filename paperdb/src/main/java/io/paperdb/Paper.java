@@ -8,7 +8,7 @@ import android.os.Bundle;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.kryo5.Serializer;
 
 import java.io.File;
 import java.util.HashMap;

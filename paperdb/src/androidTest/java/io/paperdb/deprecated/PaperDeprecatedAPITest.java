@@ -106,25 +106,25 @@ public class PaperDeprecatedAPITest {
     public void testReplace() {
         Paper.put("city", "Lund");
         Paper.put("city", "Kyiv");
-        assertThat(Paper.get("city")).isEqualTo("Kyiv");
+        assertThat(Paper.<String>get("city")).isEqualTo("Kyiv");
     }
 
     @Test
     public void testValidKeyNames() {
         Paper.put("city", "Lund");
-        assertThat(Paper.get("city")).isEqualTo("Lund");
+        assertThat(Paper.<String>get("city")).isEqualTo("Lund");
 
         Paper.put("city.dasd&%", "Lund");
-        assertThat(Paper.get("city.dasd&%")).isEqualTo("Lund");
+        assertThat(Paper.<String>get("city.dasd&%")).isEqualTo("Lund");
 
         Paper.put("city-ads", "Lund");
-        assertThat(Paper.get("city-ads")).isEqualTo("Lund");
+        assertThat(Paper.<String>get("city-ads")).isEqualTo("Lund");
     }
 
     @Test(expected = PaperDbException.class)
     public void testInvalidKeyNameBackslash() {
         Paper.put("city/ads", "Lund");
-        assertThat(Paper.get("city/ads")).isEqualTo("Lund");
+        assertThat(Paper.<String>get("city/ads")).isEqualTo("Lund");
     }
 
 }

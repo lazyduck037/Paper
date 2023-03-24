@@ -5,7 +5,7 @@ import android.content.Context;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.kryo5.Serializer;
 
 import java.util.HashMap;
 import java.util.List;

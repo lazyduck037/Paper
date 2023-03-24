@@ -83,7 +83,7 @@ class KotlinCompatibilityTest{
         testReadWrite(PersonWithLambda { name = "new-name" })
     }
 
-    private fun testReadWriteWithoutClassCheck(originObj: Any): Any {
+    private fun testReadWriteWithoutClassCheck(originObj: Any): Any? {
         Paper.book().write("obj", originObj)
         val readObj = Paper.book().read<Any>("obj")
         assertThat(readObj).isEqualTo(originObj)
@@ -92,7 +92,7 @@ class KotlinCompatibilityTest{
 
     private fun testReadWrite(originObj: Any) {
         val readObj = testReadWriteWithoutClassCheck(originObj)
-        assertThat(readObj.javaClass).isEqualTo(originObj.javaClass)
+        assertThat(readObj?.javaClass).isEqualTo(originObj.javaClass)
     }
 
 }

@@ -1,8 +1,8 @@
 package io.paperdb.serializer;
 
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.serializers.CollectionSerializer;
+import com.esotericsoftware.kryo.kryo5.Kryo;
+import com.esotericsoftware.kryo.kryo5.io.Input;
+import com.esotericsoftware.kryo.kryo5.serializers.CollectionSerializer;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -15,7 +15,7 @@ import java.util.Collection;
  */
 public class NoArgCollectionSerializer extends CollectionSerializer {
     @Override
-    protected Collection create(Kryo kryo, Input input, Class<Collection> type) {
-        return new ArrayList();
+    protected Collection create(Kryo kryo, Input input, Class type, int size) {
+        return new ArrayList<>();
     }
 }

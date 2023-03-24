@@ -2,16 +2,6 @@ package io.paperdb;
 
 import android.content.Context;
 import android.util.Log;
-
-import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.KryoException;
-import com.esotericsoftware.kryo.Serializer;
-import com.esotericsoftware.kryo.io.Input;
-import com.esotericsoftware.kryo.io.Output;
-import com.esotericsoftware.kryo.serializers.CompatibleFieldSerializer;
-
-import org.objenesis.strategy.StdInstantiatorStrategy;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -24,14 +14,17 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
-
-import de.javakaffee.kryoserializers.ArraysAsListSerializer;
-import de.javakaffee.kryoserializers.SynchronizedCollectionsSerializer;
-import de.javakaffee.kryoserializers.UUIDSerializer;
-import de.javakaffee.kryoserializers.UnmodifiableCollectionsSerializer;
 import io.paperdb.serializer.NoArgCollectionSerializer;
-
 import static io.paperdb.Paper.TAG;
+import com.esotericsoftware.kryo.kryo5.Kryo;
+import com.esotericsoftware.kryo.kryo5.KryoException;
+import com.esotericsoftware.kryo.kryo5.Serializer;
+import com.esotericsoftware.kryo.kryo5.SerializerFactory;
+import com.esotericsoftware.kryo.kryo5.io.Input;
+import com.esotericsoftware.kryo.kryo5.io.Output;
+import com.esotericsoftware.kryo.kryo5.objenesis.strategy.StdInstantiatorStrategy;
+import com.esotericsoftware.kryo.kryo5.serializers.CompatibleFieldSerializer;
+import com.esotericsoftware.kryo.kryo5.util.DefaultInstantiatorStrategy;
 
 class DbStoragePlainFile {
     private static final String BACKUP_EXTENSION = ".bak";
@@ -56,18 +49,19 @@ class DbStoragePlainFile {
         Kryo kryo = new Kryo();
 
         if (compatibilityMode) {
-            kryo.getFieldSerializerConfig().setOptimizedGenerics(true);
+            kryo.setOptimizedGenerics(true);
         }
 
         kryo.register(PaperTable.class);
         kryo.setDefaultSerializer(CompatibleFieldSerializer.class);
         kryo.setReferences(false);
+        kryo.setRegistrationRequired(false);
 
         // Serialize Arrays$ArrayList
         //noinspection ArraysAsListWithZeroOrOneArgument
-        kryo.register(Arrays.asList("").getClass(), new ArraysAsListSerializer());
-        UnmodifiableCollectionsSerializer.registerSerializers(kryo);
-        SynchronizedCollectionsSerializer.registerSerializers(kryo);
+        kryo.register(Arrays.asList("").getClass(), new io.paperdb.serializer.kryo.ArraysAsListSerializer());
+        io.paperdb.serializer.kryo.UnmodifiableCollectionsSerializer.registerSerializers(kryo);
+        io.paperdb.serializer.kryo.SynchronizedCollectionsSerializer.registerSerializers(kryo);
         // Serialize inner AbstractList$SubAbstractListRandomAccess
         kryo.addDefaultSerializer(new ArrayList<>().subList(0, 0).getClass(),
                 new NoArgCollectionSerializer());
@@ -77,13 +71,12 @@ class DbStoragePlainFile {
         // To keep backward compatibility don't change the order of serializers above
 
         // UUID support
-        kryo.register(UUID.class, new UUIDSerializer());
+        kryo.register(UUID.class, new io.paperdb.serializer.kryo.UUIDSerializer());
 
         for (Class<?> clazz : mCustomSerializers.keySet())
             kryo.register(clazz, mCustomSerializers.get(clazz));
 
-        kryo.setInstantiatorStrategy(
-                new Kryo.DefaultInstantiatorStrategy(new StdInstantiatorStrategy()));
+        kryo.setInstantiatorStrategy(new DefaultInstantiatorStrategy(new StdInstantiatorStrategy()));
 
         return kryo;
     }
@@ -246,7 +239,7 @@ class DbStoragePlainFile {
     }
 
     void setLogLevel(int level) {
-        com.esotericsoftware.minlog.Log.set(level);
+        com.esotericsoftware.kryo.kryo5.minlog.Log.set(level);
     }
 
     String getOriginalFilePath(String key) {
