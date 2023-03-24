@@ -3,26 +3,21 @@ package io.paperdb;
 import android.content.Context;
 import android.util.Log;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import java.io.FilenameFilter;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
+
 import java.util.HashMap;
 import java.util.List;
 import static io.paperdb.Paper.TAG;
 
-
-
 class DbStoragePlainFile {
-    private static final String BACKUP_EXTENSION = ".bak";
-    private final String mDbPath;
+
+    private final DbManager dbManager;
     private final HashMap<Class, com.esotericsoftware.kryo.kryo5.Serializer> mCustomSerializers;
-    private volatile boolean mPaperDirIsCreated;
     private final KeyLocker keyLocker = new KeyLocker(); // To sync key-dependent operations by key
     private final PaperDbKryo5Factory mPaperDbKryo5Factory;
+    private final ReadContentKryo5 readContentKryo5;
 
     private com.esotericsoftware.kryo.kryo5.Kryo getKryo() {
         return mKryo.get();
@@ -36,15 +31,19 @@ class DbStoragePlainFile {
         mCustomSerializers = serializers;
         mPaperDbKryo5Factory = new PaperDbKryo5Factory(serializers);
         mKryo = new ThreadLocalKryo(mPaperDbKryo5Factory);
-        mDbPath = context.getFilesDir() + File.separator + dbName;
+        String mDbPath = context.getFilesDir() + File.separator + dbName;
+        readContentKryo5 = new ReadContentKryo5(mKryo);
+        dbManager = new DbManager(mDbPath);
     }
 
     DbStoragePlainFile(String dbFilesDir, String dbName,
                        HashMap<Class, com.esotericsoftware.kryo.kryo5.Serializer> serializers) {
         mCustomSerializers = serializers;
-        mDbPath = dbFilesDir + File.separator + dbName;
+        String dbPath = dbFilesDir + File.separator + dbName;
         mPaperDbKryo5Factory = new PaperDbKryo5Factory(serializers);
         mKryo = new ThreadLocalKryo(mPaperDbKryo5Factory);
+        readContentKryo5 = new ReadContentKryo5(mKryo);
+        dbManager = new DbManager(dbPath);
     }
 
     void destroy() {
@@ -52,11 +51,9 @@ class DbStoragePlainFile {
         // and block future per-key operations until destroy is completed
         try {
             keyLocker.acquireGlobal();
-
-            if (!deleteDirectory(mDbPath)) {
-                Log.e(TAG, "Couldn't delete Paper dir " + mDbPath);
+            if (!dbManager.destroy()) {
+                Log.e(TAG, "Couldn't delete Paper dir " + dbManager.getDbPath());
             }
-            mPaperDirIsCreated = false;
         } finally {
             keyLocker.releaseGlobal();
         }
@@ -65,27 +62,17 @@ class DbStoragePlainFile {
     <E> void insert(String key, E value) {
         try {
             keyLocker.acquire(key);
-            assertInit();
+            dbManager.assertInit();
 
-            final PaperTable<E> paperTable = new PaperTable<>(value);
-
-            final File originalFile = getOriginalFile(key);
-            final File backupFile = makeBackupFile(originalFile);
-            // Rename the current file so it may be used as a backup during the next read
-            if (originalFile.exists()) {
-                //Rename original to backup
-                if (!backupFile.exists()) {
-                    if (!originalFile.renameTo(backupFile)) {
-                        throw new PaperDbException("Couldn't rename file " + originalFile
-                                + " to backup file " + backupFile);
-                    }
-                } else {
-                    //Backup exist -> original file is broken and must be deleted
-                    //noinspection ResultOfMethodCallIgnored
-                    originalFile.delete();
-                }
+            final File originalFile = dbManager.getOriginalFile(key);
+            final File backupFile = dbManager.makeBackupFile(originalFile);
+            // Rename the current file so it may be used as a backup during the next readFile
+            if(!dbManager.createBackWrite(originalFile, backupFile)){
+                throw new PaperDbException("Couldn't rename file " + originalFile
+                        + " to backup file " + backupFile);
             }
 
+            final PaperTable<E> paperTable = new PaperTable<>(value);
             writeTableFile(key, paperTable, originalFile, backupFile);
         } finally {
             keyLocker.release(key);
@@ -95,21 +82,12 @@ class DbStoragePlainFile {
     <E> E select(String key) {
         try {
             keyLocker.acquire(key);
-            assertInit();
-
-            final File originalFile = getOriginalFile(key);
-            final File backupFile = makeBackupFile(originalFile);
-            if (backupFile.exists()) {
-                //noinspection ResultOfMethodCallIgnored
-                originalFile.delete();
-                //noinspection ResultOfMethodCallIgnored
-                backupFile.renameTo(originalFile);
-            }
-
-            if (!existsInternal(key)) {
+            dbManager.assertInit();
+            final File originalFile = dbManager.getOriginalFile(key);
+            final File backupFile = dbManager.makeBackupFile(originalFile);
+            if(!dbManager.createBackUpBeforeSelect(originalFile, backupFile, key)){
                 return null;
             }
-
             return readTableFile(key, originalFile);
         } finally {
             keyLocker.release(key);
@@ -119,26 +97,16 @@ class DbStoragePlainFile {
     boolean exists(String key) {
         try {
             keyLocker.acquire(key);
-            return existsInternal(key);
+            return dbManager.existsInternal(key);
         } finally {
             keyLocker.release(key);
         }
     }
 
-    private boolean existsInternal(String key) {
-        assertInit();
-
-        final File originalFile = getOriginalFile(key);
-        return originalFile.exists();
-    }
-
     long lastModified(String key) {
         try {
             keyLocker.acquire(key);
-            assertInit();
-
-            final File originalFile = getOriginalFile(key);
-            return originalFile.exists() ? originalFile.lastModified() : -1;
+            return dbManager.lastModified(key);
         } finally {
             keyLocker.release(key);
         }
@@ -149,24 +117,7 @@ class DbStoragePlainFile {
             // Acquire global lock to make sure per-key operations (delete etc) completed
             // and block future per-key operations until reading for all keys is completed
             keyLocker.acquireGlobal();
-            assertInit();
-
-            File bookFolder = new File(mDbPath);
-            String[] names = bookFolder.list(new FilenameFilter() {
-                @Override
-                public boolean accept(File file, String s) {
-                    return !s.endsWith(BACKUP_EXTENSION);
-                }
-            });
-            if (names != null) {
-                //remove extensions
-                for (int i = 0; i < names.length; i++) {
-                    names[i] = names[i].replace(".pt", "");
-                }
-                return Arrays.asList(names);
-            } else {
-                return new ArrayList<>();
-            }
+            return dbManager.getAllKeys();
         } finally {
             keyLocker.releaseGlobal();
         }
@@ -175,18 +126,7 @@ class DbStoragePlainFile {
     void deleteIfExists(String key) {
         try {
             keyLocker.acquire(key);
-            assertInit();
-
-            final File originalFile = getOriginalFile(key);
-            if (!originalFile.exists()) {
-                return;
-            }
-
-            boolean deleted = originalFile.delete();
-            if (!deleted) {
-                throw new PaperDbException("Couldn't delete file " + originalFile
-                        + " for table " + key);
-            }
+            dbManager.deleteTable(key);
         } finally {
             keyLocker.release(key);
         }
@@ -197,11 +137,11 @@ class DbStoragePlainFile {
     }
 
     String getOriginalFilePath(String key) {
-        return mDbPath + File.separator + key + ".pt";
+        return dbManager.getOriginalFilePath(key);
     }
 
     String getRootFolderPath() {
-        return mDbPath;
+        return dbManager.getDbPath();
     }
 
     private File getOriginalFile(String key) {
@@ -254,13 +194,13 @@ class DbStoragePlainFile {
 
     private <E> E readTableFile(String key, File originalFile) {
         try {
-            return readContent(originalFile, getKryo());
+            return readContentKryo5.readContent(originalFile);
         } catch (FileNotFoundException | com.esotericsoftware.kryo.kryo5.KryoException | ClassCastException e) {
             Throwable exception = e;
             // Give one more chance, read data in paper 1.x compatibility mode
             if (e instanceof com.esotericsoftware.kryo.kryo5.KryoException) {
                 try {
-                    return readContent(originalFile, mPaperDbKryo5Factory.createKryoInstance(true));
+                    return readContentKryo5.readContentRetry(originalFile, mPaperDbKryo5Factory.createKryoInstance(true));
                 } catch (FileNotFoundException | com.esotericsoftware.kryo.kryo5.KryoException | ClassCastException compatibleReadException) {
                     exception = compatibleReadException;
                 }
@@ -269,55 +209,6 @@ class DbStoragePlainFile {
                     + originalFile + " for table " + key;
             throw new PaperDbException(errorMessage, exception);
         }
-    }
-
-    private <E> E readContent(File originalFile, com.esotericsoftware.kryo.kryo5.Kryo kryo) throws FileNotFoundException, com.esotericsoftware.kryo.kryo5.KryoException {
-        final com.esotericsoftware.kryo.kryo5.io.Input i = new com.esotericsoftware.kryo.kryo5.io.Input(new FileInputStream(originalFile));
-        //noinspection TryFinallyCanBeTryWithResources
-        try {
-            //noinspection unchecked
-            final PaperTable<E> paperTable = kryo.readObject(i, PaperTable.class);
-            return paperTable.mContent;
-        } finally {
-            i.close();
-        }
-    }
-
-    /**
-     * Must be synchronized to avoid race conditions on creating dir from different threads
-     */
-    private synchronized void assertInit() {
-        if (!mPaperDirIsCreated) {
-            if (!new File(mDbPath).exists()) {
-                boolean isReady = new File(mDbPath).mkdirs();
-                if (!isReady) {
-                    throw new RuntimeException("Couldn't create Paper dir: " + mDbPath);
-                }
-            }
-            mPaperDirIsCreated = true;
-        }
-    }
-
-    private static boolean deleteDirectory(String dirPath) {
-        File directory = new File(dirPath);
-        if (directory.exists()) {
-            File[] files = directory.listFiles();
-            if (null != files) {
-                for (File file : files) {
-                    if (file.isDirectory()) {
-                        deleteDirectory(file.toString());
-                    } else {
-                        //noinspection ResultOfMethodCallIgnored
-                        file.delete();
-                    }
-                }
-            }
-        }
-        return directory.delete();
-    }
-
-    private File makeBackupFile(File originalFile) {
-        return new File(originalFile.getPath() + BACKUP_EXTENSION);
     }
 
     /**
