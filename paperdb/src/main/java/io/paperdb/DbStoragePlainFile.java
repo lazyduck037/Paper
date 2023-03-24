@@ -3,46 +3,74 @@ package io.paperdb;
 import android.content.Context;
 import android.util.Log;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import static io.paperdb.Paper.TAG;
+import com.esotericsoftware.kryo.kryo5.Serializer;
+import io.paperdb.kryo4.PaperDbKryo4Factory;
+import io.paperdb.kryo4.ReadContentKryo4;
+import io.paperdb.kryo4.ThreadLocalKryo4;
+import io.paperdb.kryo5.PaperDbKryo5Factory;
+import io.paperdb.kryo5.ReadContentKryo5;
+import io.paperdb.kryo5.ThreadLocalKryo5;
 
 class DbStoragePlainFile {
-
+    private final boolean mIsMigration;
     private final DbManager dbManager;
-    private final HashMap<Class, com.esotericsoftware.kryo.kryo5.Serializer> mCustomSerializers;
+    private DbManagerV4 dbManagerV4;
     private final KeyLocker keyLocker = new KeyLocker(); // To sync key-dependent operations by key
-    private final PaperDbKryo5Factory mPaperDbKryo5Factory;
-    private final ReadContentKryo5 readContentKryo5;
 
-    private com.esotericsoftware.kryo.kryo5.Kryo getKryo() {
-        return mKryo.get();
-    }
+    private final Operation operation;
 
-    private final ThreadLocal<com.esotericsoftware.kryo.kryo5.Kryo> mKryo;
-
+    private final boolean mForceUse4;
 
     DbStoragePlainFile(Context context, String dbName,
-                       HashMap<Class, com.esotericsoftware.kryo.kryo5.Serializer> serializers) {
-        mCustomSerializers = serializers;
-        mPaperDbKryo5Factory = new PaperDbKryo5Factory(serializers);
-        mKryo = new ThreadLocalKryo(mPaperDbKryo5Factory);
-        String mDbPath = context.getFilesDir() + File.separator + dbName;
-        readContentKryo5 = new ReadContentKryo5(mKryo);
-        dbManager = new DbManager(mDbPath);
+                       HashMap<Class, Serializer> serializersV5,
+                       HashMap<Class, com.esotericsoftware.kryo.Serializer> serializersV4,
+                       boolean isMigration,
+                       boolean forceUse4
+                       ) {
+        mForceUse4 = forceUse4;
+        if (!forceUse4) mIsMigration = isMigration; else mIsMigration = false;
+
+        ReadContentKryo5 readContentKryo5 = new ReadContentKryo5(new ThreadLocalKryo5(new PaperDbKryo5Factory(serializersV5)));
+        ReadContentKryo4 readContentKryo4 = new ReadContentKryo4( new ThreadLocalKryo4(new PaperDbKryo4Factory(serializersV4)));
+        operation = new Operation(readContentKryo5, readContentKryo4, isMigration);
+
+        String dbPath = context.getFilesDir() + File.separator + dbName;
+        String oldDbPath = null;
+        if (isMigration){
+            oldDbPath = dbPath;
+            dbPath = dbPath + "New";
+            dbManagerV4 =  new DbManagerV4(oldDbPath);
+        }
+        dbManager = new DbManager(dbPath);
     }
 
     DbStoragePlainFile(String dbFilesDir, String dbName,
-                       HashMap<Class, com.esotericsoftware.kryo.kryo5.Serializer> serializers) {
-        mCustomSerializers = serializers;
+                       HashMap<Class, Serializer> serializersV5,
+                       HashMap<Class, com.esotericsoftware.kryo.Serializer> serializersV4,
+                       boolean isMigration,
+                       boolean forceUse4
+                       ) {
+        mForceUse4 = forceUse4;
+        if (!forceUse4) mIsMigration = isMigration; else mIsMigration = false;
+
+        ReadContentKryo5 readContentKryo5 = new ReadContentKryo5(new ThreadLocalKryo5(new PaperDbKryo5Factory(serializersV5)));
+        ReadContentKryo4 readContentKryo4 = new ReadContentKryo4(new ThreadLocalKryo4(new PaperDbKryo4Factory(serializersV4)));
+        operation = new Operation(readContentKryo5, readContentKryo4, isMigration);
+
         String dbPath = dbFilesDir + File.separator + dbName;
-        mPaperDbKryo5Factory = new PaperDbKryo5Factory(serializers);
-        mKryo = new ThreadLocalKryo(mPaperDbKryo5Factory);
-        readContentKryo5 = new ReadContentKryo5(mKryo);
+        String oldDbPath = null;
+        if (isMigration){
+            oldDbPath = dbPath;
+            dbPath = dbPath + "New";
+            dbManagerV4 =  new DbManagerV4(oldDbPath);
+        }
         dbManager = new DbManager(dbPath);
     }
 
@@ -54,6 +82,13 @@ class DbStoragePlainFile {
             if (!dbManager.destroy()) {
                 Log.e(TAG, "Couldn't delete Paper dir " + dbManager.getDbPath());
             }
+
+            if (mIsMigration) {
+                if (!dbManagerV4.destroy()) {
+                    Log.e(TAG, "Couldn't delete Paper dir " + dbManagerV4.getDbPath());
+                }
+            }
+
         } finally {
             keyLocker.releaseGlobal();
         }
@@ -88,7 +123,22 @@ class DbStoragePlainFile {
             if(!dbManager.createBackUpBeforeSelect(originalFile, backupFile, key)){
                 return null;
             }
-            return readTableFile(key, originalFile);
+            if (mIsMigration){
+                if(dbManager.existsInternal(key)){
+                    return operation.readTableFile(key, originalFile);
+                }
+
+                //Read Old File.
+                dbManagerV4.assertInit();
+                final File originalFileV4 = dbManagerV4.getOriginalFile(key);
+                final File backupFileV4 = dbManagerV4.makeBackupFile(originalFileV4);
+                if(!dbManagerV4.createBackUpBeforeSelect(originalFileV4, backupFileV4, key)){
+                    return null;
+                }
+                return operation.readTableFileV4(key, originalFile);
+            }else {
+                return operation.readTableFile(key, originalFile);
+            }
         } finally {
             keyLocker.release(key);
         }
@@ -97,6 +147,13 @@ class DbStoragePlainFile {
     boolean exists(String key) {
         try {
             keyLocker.acquire(key);
+            if (mIsMigration){
+                boolean res = dbManager.existsInternal(key);
+                if (!res){
+                    return dbManagerV4.existsInternal(key);
+                }
+                return true;
+            }
             return dbManager.existsInternal(key);
         } finally {
             keyLocker.release(key);
@@ -106,6 +163,12 @@ class DbStoragePlainFile {
     long lastModified(String key) {
         try {
             keyLocker.acquire(key);
+            if (mIsMigration){
+                if(dbManager.existsInternal(key)){
+                    return dbManager.lastModified(key);
+                }
+                return dbManagerV4.lastModified(key);
+            }
             return dbManager.lastModified(key);
         } finally {
             keyLocker.release(key);
@@ -123,9 +186,44 @@ class DbStoragePlainFile {
         }
     }
 
+    List<String> getTotalKey() {
+        try {
+            // Acquire global lock to make sure per-key operations (delete etc) completed
+            // and block future per-key operations until reading for all keys is completed
+            keyLocker.acquireGlobal();
+            List<String> currentDb =  dbManager.getAllKeys();
+            List<String> oldDb;
+            if (mIsMigration){
+                oldDb = dbManagerV4.getAllKeys();
+            }else {
+                oldDb = new ArrayList<>();
+            }
+            HashSet<String> res = new HashSet<>(currentDb);
+            res.addAll(oldDb);
+            return new ArrayList<String>(res);
+        } finally {
+            keyLocker.releaseGlobal();
+        }
+    }
+
+    List<String> getAllKeysV4() {
+        try {
+            // Acquire global lock to make sure per-key operations (delete etc) completed
+            // and block future per-key operations until reading for all keys is completed
+            keyLocker.acquireGlobal();
+            if (!mIsMigration) return new ArrayList<>();
+            return dbManagerV4.getAllKeys();
+        } finally {
+            keyLocker.releaseGlobal();
+        }
+    }
+
     void deleteIfExists(String key) {
         try {
             keyLocker.acquire(key);
+            if(mIsMigration){
+                dbManagerV4.deleteTable(key);
+            }
             dbManager.deleteTable(key);
         } finally {
             keyLocker.release(key);
@@ -134,19 +232,25 @@ class DbStoragePlainFile {
 
     void setLogLevel(int level) {
         com.esotericsoftware.kryo.kryo5.minlog.Log.set(level);
+        if (mIsMigration){
+            com.esotericsoftware.minlog.Log.set(level);
+        }
     }
 
     String getOriginalFilePath(String key) {
         return dbManager.getOriginalFilePath(key);
     }
 
+    String getOriginalFilePathV4(String key) {
+        return dbManagerV4.getOriginalFilePath(key);
+    }
+
     String getRootFolderPath() {
         return dbManager.getDbPath();
     }
 
-    private File getOriginalFile(String key) {
-        final String tablePath = getOriginalFilePath(key);
-        return new File(tablePath);
+    String getRootFolderPathV4() {
+        return dbManagerV4.getDbPath();
     }
 
     /**
@@ -165,7 +269,7 @@ class DbStoragePlainFile {
         try {
             FileOutputStream fileStream = new FileOutputStream(originalFile);
             kryoOutput = new com.esotericsoftware.kryo.kryo5.io.Output(fileStream);
-            getKryo().writeObject(kryoOutput, paperTable);
+            operation.getKryo().writeObject(kryoOutput, paperTable);
             kryoOutput.flush();
             fileStream.flush();
             sync(fileStream);
@@ -192,24 +296,7 @@ class DbStoragePlainFile {
         }
     }
 
-    private <E> E readTableFile(String key, File originalFile) {
-        try {
-            return readContentKryo5.readContent(originalFile);
-        } catch (FileNotFoundException | com.esotericsoftware.kryo.kryo5.KryoException | ClassCastException e) {
-            Throwable exception = e;
-            // Give one more chance, read data in paper 1.x compatibility mode
-            if (e instanceof com.esotericsoftware.kryo.kryo5.KryoException) {
-                try {
-                    return readContentKryo5.readContentRetry(originalFile, mPaperDbKryo5Factory.createKryoInstance(true));
-                } catch (FileNotFoundException | com.esotericsoftware.kryo.kryo5.KryoException | ClassCastException compatibleReadException) {
-                    exception = compatibleReadException;
-                }
-            }
-            String errorMessage = "Couldn't read/deserialize file "
-                    + originalFile + " for table " + key;
-            throw new PaperDbException(errorMessage, exception);
-        }
-    }
+
 
     /**
      * Perform an fsync on the given FileOutputStream.  The stream at this

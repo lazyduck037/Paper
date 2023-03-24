@@ -37,17 +37,23 @@ public class Paper {
     @SuppressLint("StaticFieldLeak") private static Context mContext;
 
     private static final ConcurrentHashMap<String, Book> mBookMap = new ConcurrentHashMap<>();
-    private static final HashMap<Class, Serializer> mCustomSerializers = new HashMap<>();
-
+    private static final HashMap<Class, Serializer> mCustomSerializersV5 = new HashMap<>();
+    private static final HashMap<Class, com.esotericsoftware.kryo.Serializer> mCustomSerializersV4 = new HashMap<>();
+    private static boolean isUsingOlderVersion = false;
     /**
      * Lightweight method to init Paper instance. Should be executed in {@link Application#onCreate()}
-     * or {@link android.app.Activity#onCreate(Bundle)}.
+     * or {@link android.app.Activity#onCreate(Bundle)}
      * <p/>
      *
      * @param context context, used to get application context
      */
     public static void init(@NonNull Context context) {
         mContext = context.getApplicationContext();
+    }
+
+    public static void init(@NonNull Context context, boolean isMigration) {
+        mContext = context.getApplicationContext();
+        isUsingOlderVersion = isMigration;
     }
 
     /**
@@ -102,9 +108,9 @@ public class Paper {
             Book book = mBookMap.get(key);
             if (book == null) {
                 if (location == null) {
-                    book = new Book(mContext, name, mCustomSerializers);
+                    book = new Book(mContext, name, mCustomSerializersV5, mCustomSerializersV4, isUsingOlderVersion);
                 } else {
-                    book = new Book(location, name, mCustomSerializers);
+                    book = new Book(location, name, mCustomSerializersV5, mCustomSerializersV4, isUsingOlderVersion);
                 }
                 mBookMap.put(key, book);
             }
@@ -183,7 +189,12 @@ public class Paper {
      * @param <T>        type of the serializer
      */
     public static <T> void addSerializer(@NonNull Class<T> clazz, @NonNull Serializer<T> serializer) {
-        if (!mCustomSerializers.containsKey(clazz))
-            mCustomSerializers.put(clazz, serializer);
+        if (!mCustomSerializersV5.containsKey(clazz))
+            mCustomSerializersV5.put(clazz, serializer);
+    }
+
+    public static <T> void addSerializer(@NonNull Class<T> clazz, @NonNull com.esotericsoftware.kryo.Serializer<T> serializer) {
+        if (!mCustomSerializersV4.containsKey(clazz))
+            mCustomSerializersV4.put(clazz, serializer);
     }
 }

@@ -1,4 +1,4 @@
-package io.paperdb;
+package io.paperdb.kryo5;
 
 import com.esotericsoftware.kryo.kryo5.Kryo;
 import com.esotericsoftware.kryo.kryo5.Serializer;
@@ -10,14 +10,16 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.UUID;
+
+import io.paperdb.PaperTable;
 import io.paperdb.serializer.NoArgCollectionSerializer;
 
 /**
  * @author lazyduck037
  */
-class PaperDbKryo5Factory {
+public class PaperDbKryo5Factory {
     private final HashMap<Class, Serializer> mCustomSerializers;
-    PaperDbKryo5Factory(HashMap<Class, Serializer> customSerializers){
+    public PaperDbKryo5Factory(HashMap<Class, Serializer> customSerializers){
         mCustomSerializers = customSerializers;
     }
     public Kryo createKryoInstance(boolean compatibilityMode) {

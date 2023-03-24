@@ -11,4 +11,8 @@ public class PaperTable<T> {
 
     // Serialized content
     T mContent;
+
+    public T get(){
+        return mContent;
+    }
 }

@@ -15,12 +15,21 @@ public class Book {
 
     private final DbStoragePlainFile mStorage;
 
-    protected Book(Context context, String dbName, HashMap<Class, Serializer> serializers) {
-        mStorage = new DbStoragePlainFile(context.getApplicationContext(), dbName, serializers);
+    protected Book(Context context,
+                   String dbName,
+                   HashMap<Class, Serializer> serializersV5,
+                   HashMap<Class, com.esotericsoftware.kryo.Serializer> serializersV4,
+                   boolean isMigration
+                   ) {
+        mStorage = new DbStoragePlainFile(context.getApplicationContext(), dbName, serializersV5, serializersV4, isMigration);
     }
 
-    protected Book(String dbPath, String dbName, HashMap<Class, Serializer> serializers) {
-        mStorage = new DbStoragePlainFile(dbPath, dbName, serializers);
+    protected Book(String dbPath, String dbName,
+                   HashMap<Class, Serializer> serializersV5,
+                   HashMap<Class, com.esotericsoftware.kryo.Serializer> serializersV4,
+                   boolean isMigration
+                   ) {
+        mStorage = new DbStoragePlainFile(dbPath, dbName, serializersV5, serializersV4, isMigration);
     }
 
     /**
@@ -125,7 +134,7 @@ public class Book {
      * @return all keys
      */
     public @NonNull List<String> getAllKeys() {
-        return mStorage.getAllKeys();
+        return mStorage.getTotalKey();
     }
 
     /**
@@ -151,6 +160,10 @@ public class Book {
         return mStorage.getRootFolderPath();
     }
 
+    public @NonNull String getPathV4() {
+        return mStorage.getRootFolderPathV4();
+    }
+
     /**
      * Returns path to a *.pt file containing saved object for a given key.
      * Could be handy for object export/import purposes.
@@ -164,5 +177,9 @@ public class Book {
      */
     public @NonNull String getPath(@NonNull String key) {
         return mStorage.getOriginalFilePath(key);
+    }
+
+    public @NonNull String getPathOld(@NonNull String key) {
+        return mStorage.getOriginalFilePathV4(key);
     }
 }
