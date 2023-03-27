@@ -19,7 +19,7 @@ class Operation {
     private final ReadContentKryo5 mKryo5;
     private final ReadContentKryo4 mKryo4;
 
-    Operation(ReadContentKryo5 kryo5, ReadContentKryo4 kryo4, boolean isMigrate){
+    Operation(ReadContentKryo5 kryo5, ReadContentKryo4 kryo4){
         mKryo4 = kryo4;
         mKryo5 = kryo5;
     }
@@ -45,6 +45,7 @@ class Operation {
 
     <E> E readTableFileV4(String key, File originalFile) {
         try {
+            if (mKryo4 == null) return null;
             return mKryo4.readContent(originalFile);
         } catch (FileNotFoundException | com.esotericsoftware.kryo.KryoException | ClassCastException e) {
             Throwable exception = e;
@@ -119,8 +120,11 @@ class Operation {
                                       File originalFile, File backupFile) {
         com.esotericsoftware.kryo.io.Output kryoOutput = null;
         try {
+            com.esotericsoftware.kryo.Kryo kryo = getKryo4();
+            if(kryo == null) return;
             FileOutputStream fileStream = new FileOutputStream(originalFile);
             kryoOutput = new com.esotericsoftware.kryo.io.Output(fileStream);
+
             getKryo4().writeObject(kryoOutput, paperTable);
             kryoOutput.flush();
             fileStream.flush();
@@ -153,6 +157,7 @@ class Operation {
     }
 
     public com.esotericsoftware.kryo.Kryo getKryo4(){
+        if (mKryo4 == null) return null;
         return mKryo4.getKryo();
     }
 }

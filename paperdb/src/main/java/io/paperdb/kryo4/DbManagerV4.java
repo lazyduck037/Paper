@@ -14,13 +14,11 @@ import io.paperdb.Utils;
 public class DbManagerV4 {
    private static final String BACKUP_EXTENSION = ".bak";
    private final String mOldDbPath;
-   private volatile boolean mIsForceUseV4;
 
    private volatile boolean mPaperDirIsCreatedV4;
 
-   public DbManagerV4(String oldDbName, boolean isForceUseV4){
+   public DbManagerV4(String oldDbName){
       mOldDbPath = oldDbName;
-      mIsForceUseV4 = isForceUseV4;
    }
 
    public boolean destroy(){
@@ -32,16 +30,9 @@ public class DbManagerV4 {
    public synchronized void assertInit() {
       if (!mPaperDirIsCreatedV4) {
          if (!new File(mOldDbPath).exists()) {
-            if (mIsForceUseV4) {
-               boolean isReady = new File(mOldDbPath).mkdirs();
-               if (!isReady) {
-                  throw new RuntimeException("Couldn't create Paper dir: " + mOldDbPath);
-               }
-            }else {
-               boolean isReady = new File(mOldDbPath).mkdirs();
-               if (!isReady) {
-                  throw new RuntimeException("Couldn't create Paper dir: " + mOldDbPath);
-               }
+            boolean isReady = new File(mOldDbPath).mkdirs();
+            if (!isReady) {
+               throw new RuntimeException("Couldn't create Paper dir: " + mOldDbPath);
             }
          }
          mPaperDirIsCreatedV4 = true;

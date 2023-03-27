@@ -162,10 +162,6 @@ public class Book {
         return mStorage.getRootFolderPath();
     }
 
-    public @NonNull String getPathV4() {
-        return mStorage.getRootFolderPathV4();
-    }
-
     /**
      * Returns path to a *.pt file containing saved object for a given key.
      * Could be handy for object export/import purposes.
@@ -179,10 +175,6 @@ public class Book {
      */
     public @NonNull String getPath(@NonNull String key) {
         return mStorage.getOriginalFilePath(key);
-    }
-
-    public @NonNull String getPathOld(@NonNull String key) {
-        return mStorage.getOriginalFilePathV4(key);
     }
 
     public @NonNull String getDbName() {
