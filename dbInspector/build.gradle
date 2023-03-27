@@ -2,7 +2,7 @@ apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
 
 buildscript {
-    ext.kotlin_version = '1.6.21'
+    ext.kotlin_version = '1.8.0'
     repositories {
         mavenCentral()
     }
@@ -13,14 +13,6 @@ buildscript {
 repositories {
     mavenCentral()
 }
-
-ext {
-    PUBLISH_GROUP_ID = 'io.github.pilgr'
-    PUBLISH_VERSION = '2.7.2'
-    PUBLISH_ARTIFACT_ID = 'paperdb'
-}
-
-apply from: "${rootProject.projectDir}/scripts/publish-module.gradle"
 
 android {
     compileSdkVersion 33
@@ -56,7 +48,7 @@ android {
     useLibrary 'android.test.runner'
     useLibrary 'android.test.base'
     useLibrary 'android.test.mock'
-    namespace 'io.paperdb'
+    namespace 'io.db.inspector'
 }
 
 afterEvaluate {
@@ -69,18 +61,7 @@ afterEvaluate {
 }
 
 dependencies {
-
-    api 'de.javakaffee:kryo-serializers:0.40'
-    api 'com.esotericsoftware:kryo:4.0.1'
-
-    api files('libs/kryo5-5.4.1.jar')
-
-
     implementation "androidx.appcompat:appcompat:1.6.1"
     androidTestImplementation 'androidx.test:rules:1.5.0'
-    androidTestImplementation 'com.orhanobut:hawk:1.14'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
-    androidTestImplementation 'com.squareup.assertj:assertj-android:1.1.0'
-    androidTestImplementation 'joda-time:joda-time:2.9.6'
     androidTestImplementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
 }

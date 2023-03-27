@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import io.db.inspector.InspectorDb;
 import io.paperdb.Paper;
 
 
@@ -26,7 +27,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         Paper.init(this);
-
+        InspectorDb.INSTANCE.init();
         findViewById(R.id.test_write).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
