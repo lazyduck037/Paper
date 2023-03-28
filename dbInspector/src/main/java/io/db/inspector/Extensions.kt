@@ -2,7 +2,12 @@ package io.db.inspector
 
 import android.text.TextUtils
 
-
+fun <E>List<E>.toMuteListIfNeed():MutableList<E> {
+    if (this is ArrayList<E>){
+        return this
+    }
+    return toMutableList()
+}
 fun String.toMimeType():String?{
     return if (TextUtils.isEmpty(this)) {
         null;

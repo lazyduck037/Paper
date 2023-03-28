@@ -3,10 +3,11 @@ package io.db.inspector
 import java.net.ServerSocket
 import java.net.SocketException
 
-class Server(private val port:Int) : Runnable {
+class Server(private val port:Int, dbName:String?) : Runnable {
     private var mServerSocket: ServerSocket? = null
     private var mIsRunning = false
-    private val request = Request()
+    private val request = Request(PaperDbInspector(dbName))
+
 
     fun start() {
         mIsRunning = true

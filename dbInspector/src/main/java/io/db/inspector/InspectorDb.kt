@@ -1,7 +1,8 @@
 package io.db.inspector
 
 object InspectorDb {
-    fun init(){
-        Server(8080).start()
+    fun init(port:Int? = null, dbName:String? = null){
+
+        Server(port ?: 8080, dbName).start()
     }
 }

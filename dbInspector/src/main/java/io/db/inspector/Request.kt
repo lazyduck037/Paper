@@ -6,7 +6,7 @@ import java.io.InputStreamReader
 import java.io.PrintStream
 import java.net.Socket
 
-class Request {
+class Request(val paper:PaperDbInspector){
     fun handle(socket: Socket) {
         var output:PrintStream? = null
         var reader:BufferedReader? = null
@@ -27,7 +27,12 @@ class Request {
             if (route.isEmpty()) {
                 route = "index.html";
             }
-            val bytes = "Hello".toByteArray()
+
+            val bytes = if (route.startsWith("index.html")){
+                "${paper.listAllKey().map { it }}".toByteArray()
+            }else {
+                "Hello".toByteArray()
+            }
             output = PrintStream(socket.getOutputStream())
             output.println("HTTP/1.0 200 OK");
             output.println("Content-Type: " + route.toMimeType())
