@@ -13,11 +13,13 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         Paper.init(this)
-        InspectorDb.init()
 
         findViewById<View>(R.id.test_write).setOnClickListener {
             Thread{
                 Paper.book().write("o2", Product("12L","Hello", "new product"))
+                Paper.book().write("o3", Product("12L","Hello", "new product"))
+                Paper.book().write("o4", Product("12L","Hello", "new product"))
+                WireDb.write(this.application)
             }.start()
         }
 

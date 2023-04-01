@@ -19,7 +19,7 @@ android {
     // Must be the same version as in travis.xml
 
     defaultConfig {
-        minSdkVersion 14
+        minSdkVersion 20
         targetSdkVersion 33
 
         consumerProguardFiles 'proguard.txt'
@@ -62,6 +62,6 @@ afterEvaluate {
 
 dependencies {
     implementation project(':paperdb')
-
+    implementation 'com.google.code.gson:gson:2.10.1'
     androidTestImplementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
 }

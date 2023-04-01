@@ -1,13 +1,19 @@
 package io.db.inspector
 
+import android.content.Context
+import com.google.gson.Gson
 import java.net.ServerSocket
 import java.net.SocketException
 
-class Server(private val port:Int, dbName:String?) : Runnable {
+class Server(
+    context:Context,
+    gson:Gson?,
+    private val port:Int,
+    dbName:String?
+) : Runnable {
     private var mServerSocket: ServerSocket? = null
     private var mIsRunning = false
-    private val request = Request(PaperDbInspector(dbName))
-
+    private val request = RequestHandler(context,gson ?: Gson() , PaperDbInspector(context, dbName))
 
     fun start() {
         mIsRunning = true
