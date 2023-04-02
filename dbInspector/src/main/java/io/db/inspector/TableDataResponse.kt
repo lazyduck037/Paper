@@ -1,9 +1,9 @@
 package io.db.inspector
 
 class TableDataResponse {
-    var tableInfos: ArrayList<TableInfo>? = null
+    var tableInfos = ArrayList<TableInfo>()
     var isSuccessful = false
-    var rows: ArrayList<Any>? = null
+    var rows = ArrayList<Any>()
     var errorMessage: String? = null
     var isEditable = false
     var isSelectQuery = false

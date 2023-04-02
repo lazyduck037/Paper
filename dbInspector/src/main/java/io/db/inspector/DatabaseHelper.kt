@@ -10,8 +10,9 @@ object DatabaseHelper {
         val c = database.rawQuery(
             "SELECT name FROM sqlite_master WHERE type='table' OR type='view' ORDER BY name COLLATE NOCASE",
             null
-        )
-        if (c!!.moveToFirst()) {
+        ) ?: return response
+
+        if (c.moveToFirst()) {
             while (!c.isAfterLast) {
                 response.rows.add(c.getString(0))
                 c.moveToNext()
@@ -26,9 +27,9 @@ object DatabaseHelper {
         return response
     }
 
-    fun getTableData(db: SQLiteDB, selectQuery: String, tableName: String?): TableDataResponse {
-        var selectQuery = selectQuery
-        var tableName = tableName
+    fun getTableData(db: SQLiteDB, selectQueryParam: String, tableNameParam: String?): TableDataResponse {
+        var selectQuery = selectQueryParam
+        var tableName = tableNameParam
         val tableData = TableDataResponse()
         tableData.isSelectQuery = true
         if (tableName == null) {
@@ -37,7 +38,7 @@ object DatabaseHelper {
         val quotedTableName = getQuotedTableName(tableName)
         if (tableName != null) {
             val pragmaQuery = "PRAGMA table_info($quotedTableName)"
-            tableData.tableInfos = getTableInfo(db, pragmaQuery)
+            tableData.tableInfos = getTableInfo(db, pragmaQuery) ?: arrayListOf()
         }
         var cursor: Cursor? = null
         var isView = false
@@ -52,7 +53,7 @@ object DatabaseHelper {
         } finally {
             cursor?.close()
         }
-        tableData.isEditable = tableName != null && tableData.tableInfos != null && !isView
+        tableData.isEditable = tableName != null && tableData.tableInfos.isNullOrEmpty() && !isView
         if (!TextUtils.isEmpty(tableName)) {
             selectQuery = selectQuery.replace(tableName!!, quotedTableName)
         }
@@ -69,7 +70,7 @@ object DatabaseHelper {
 
             // setting tableInfo when tableName is not known and making
             // it non-editable also by making isPrimary true for all
-            if (tableData.tableInfos == null) {
+            if (tableData.tableInfos.isNullOrEmpty()) {
                 tableData.tableInfos = ArrayList()
                 for (i in 0 until cursor.columnCount) {
                     val tableInfo = TableDataResponse.TableInfo()
@@ -79,25 +80,24 @@ object DatabaseHelper {
                 }
             }
             tableData.isSuccessful = true
-            tableData.rows = ArrayList<Any>()
+            tableData.rows = ArrayList()
             val columnNames = cursor.columnNames
             val tableInfoListModified = ArrayList<TableDataResponse.TableInfo>()
             for (columnName in columnNames) {
-                for (tableInfo in tableData.tableInfos!!) {
+                for (tableInfo in tableData.tableInfos) {
                     if (columnName == tableInfo.title) {
                         tableInfoListModified.add(tableInfo)
                         break
                     }
                 }
             }
-            if (tableInfoListModified != null && tableData.tableInfos?.size !== tableInfoListModified.size) {
+            if (tableInfoListModified.isEmpty() && tableData.tableInfos.size != tableInfoListModified.size) {
                 tableData.tableInfos = tableInfoListModified
                 tableData.isEditable = false
             }
             if (cursor.count > 0) {
                 do {
-                    val row: MutableList<TableDataResponse.ColumnData> =
-                        ArrayList<TableDataResponse.ColumnData>()
+                    val row: MutableList<TableDataResponse.ColumnData> = ArrayList()
                     for (i in 0 until cursor.columnCount) {
                         val columnData: TableDataResponse.ColumnData =
                             TableDataResponse.ColumnData()
@@ -125,7 +125,7 @@ object DatabaseHelper {
                         }
                         row.add(columnData)
                     }
-                    tableData.rows!!.add(row)
+                    tableData.rows.add(row)
                 } while (cursor.moveToNext())
             }
             cursor.close()
@@ -171,10 +171,10 @@ object DatabaseHelper {
     }
 
     fun addRow(
-        db: SQLiteDB, tableName: String?,
+        db: SQLiteDB, tableNameParam: String?,
         rowDataRequests: List<RowDataRequest?>?
     ): UpdateRowResponse {
-        var tableName = tableName
+        var tableName = tableNameParam
         val updateRowResponse = UpdateRowResponse()
         if (rowDataRequests == null || tableName == null) {
             updateRowResponse.isSuccessful = false
@@ -189,11 +189,11 @@ object DatabaseHelper {
             when (rowDataRequest?.dataType) {
                 DataType.INTEGER -> contentValues.put(
                     rowDataRequest.title,
-                    java.lang.Long.valueOf(rowDataRequest.value)
+                    rowDataRequest.value?.toLongOrNull()
                 )
                 DataType.REAL -> contentValues.put(
                     rowDataRequest.title,
-                    java.lang.Double.valueOf(rowDataRequest.value)
+                    rowDataRequest.value?.toDoubleOrNull()
                 )
                 DataType.TEXT -> contentValues.put(rowDataRequest.title, rowDataRequest.value)
                 else -> contentValues.put(rowDataRequest?.title, rowDataRequest?.value)
@@ -206,10 +206,10 @@ object DatabaseHelper {
 
     fun updateRow(
         db: SQLiteDB,
-        tableName: String?,
+        tableNameParam: String?,
         rowDataRequests: List<RowDataRequest?>?
     ): UpdateRowResponse {
-        var tableName = tableName
+        var tableName = tableNameParam
         val updateRowResponse = UpdateRowResponse()
         if (rowDataRequests == null || tableName == null) {
             updateRowResponse.isSuccessful = false
@@ -234,11 +234,11 @@ object DatabaseHelper {
                 when (rowDataRequest?.dataType) {
                     DataType.INTEGER -> contentValues.put(
                         rowDataRequest.title,
-                        java.lang.Long.valueOf(rowDataRequest.value)
+                        rowDataRequest.value?.toLongOrNull()
                     )
                     DataType.REAL -> contentValues.put(
                         rowDataRequest.title,
-                        java.lang.Double.valueOf(rowDataRequest.value)
+                        rowDataRequest.value?.toDoubleOrNull()
                     )
                     DataType.TEXT -> contentValues.put(rowDataRequest.title, rowDataRequest.value)
                     else -> {}
@@ -255,10 +255,10 @@ object DatabaseHelper {
     }
 
     fun deleteRow(
-        db: SQLiteDB, tableName: String?,
+        db: SQLiteDB, tableNameParam: String?,
         rowDataRequests: List<RowDataRequest?>?
     ): UpdateRowResponse {
-        var tableName = tableName
+        var tableName = tableNameParam
         val updateRowResponse = UpdateRowResponse()
         if (rowDataRequests == null || tableName == null) {
             updateRowResponse.isSuccessful = false
@@ -295,8 +295,8 @@ object DatabaseHelper {
         return updateRowResponse
     }
 
-    fun exec(database: SQLiteDB, sql: String): TableDataResponse {
-        var sql = sql
+    fun exec(database: SQLiteDB, sqlParam: String): TableDataResponse {
+        var sql = sqlParam
         val tableDataResponse = TableDataResponse()
         tableDataResponse.isSelectQuery = false
         try {

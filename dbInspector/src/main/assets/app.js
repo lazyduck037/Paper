@@ -26,9 +26,9 @@ $( document ).ready(function() {
 
 var isDatabaseSelected = true;
 
-function getData(tableName) {
+function getData(tableName, dbName, typeDb) {
 
-   $.ajax({url: "getAllDataFromTheTable?tableName="+tableName, success: function(result){
+   $.ajax({url: "getAllDataFromTheTable?tableName="+tableName+"&database=" + dbName +"&typeDb="+typeDb, success: function(result){
 
            result = JSON.parse(result);
            inflateData(result);
@@ -86,9 +86,10 @@ function getDBList() {
              var dbName = dbList[count][0];
              var isEncrypted = dbList[count][1];
              var isDownloadable = dbList[count][2];
+             var typeDb = dbList[count][3];
              var dbAttribute = isEncrypted == "true" ? ' <span class="glyphicon glyphicon-lock" aria-hidden="true" style="color:blue"></span>' : "";
              if(dbName.indexOf("journal") == -1 && dbName.indexOf("-wal") == -1 && dbName.indexOf("-shm") == -1){
-                $("#db-list").append("<a href='#' id=" + dbName + " class='list-group-item' onClick='openDatabaseAndGetTableList(\""+ dbName + "\", \""+ isDownloadable + "\");'>" + dbName + dbAttribute + "</a>");
+                $("#db-list").append("<a href='#' id=" + dbName + " class='list-group-item' onClick='openDatabaseAndGetTableList(\""+ dbName + "\", \""+ isDownloadable + "\", \"" + typeDb + "\");'>" + dbName + dbAttribute + "</a>");
                 if(!isSelectionDone){
                     isSelectionDone = true;
                     $('#db-list').find('a').trigger('click');
@@ -101,7 +102,7 @@ function getDBList() {
 }
 
 var lastTableName = getHashValue('table');
-function openDatabaseAndGetTableList(db, isDownloadable) {
+function openDatabaseAndGetTableList(db, isDownloadable, typeDb) {
 
     if("APP_SHARED_PREFERENCES" == db) {
         $('#run-query').removeClass('active');
@@ -131,7 +132,7 @@ function openDatabaseAndGetTableList(db, isDownloadable) {
     }
 
 
-   $.ajax({url: "getTableList?database="+db, success: function(result){
+   $.ajax({url: "getTableList?database="+db+"&typeDb="+typeDb, success: function(result){
 
            result = JSON.parse(result);
            var tableList = result.rows;
@@ -143,7 +144,8 @@ function openDatabaseAndGetTableList(db, isDownloadable) {
            for(var count = 0; count < tableList.length; count++){
                 var tableName = tableList[count];
 				$("#table-list").append("<a href='#table=" + tableName + "' data-db-name='" + db + "' data-table-name='" + tableName
-					+ "' class='list-group-item' onClick='getData(\"" + tableName + "\");'>" + tableName + "</a>");
+					+ "' class='list-group-item' onClick='getData(\""+ tableName + "\", \"" + db + "\", \"" + typeDb + "\");'>" + tableName + "</a>");
+
 			}
 
 			if (lastTableName !== null) {
